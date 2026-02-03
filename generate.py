@@ -17,11 +17,29 @@ class Generate(AsyncLLMClient):
         assert text, response
         jsonschema.validate(text, GENERATE_SCHEMA)
         questions = []
-        STOP_WORDS = ['fig.', 'tbl.', 'see fig', 'shown in fig', 
+        STOP_WORDS = ['fig.', 'tbl.', 'see fig', 'shown in fig',
                       'see section', 'this section', 'sec.', 'appendix', 'eq.', 'the paper', 'this paper']
+
+        # Keywords that suggest condition-dependency
+        CONDITION_KEYWORDS = ['this', 'these', 'given', 'under', 'at this', 'for this',
+                             'in this', 'at these', 'for these', 'in these', 'the stated',
+                             'the specified', 'the observed', 'the measured']
+
         for x in text['questions']:
-            if any(y in x['question'].lower() for y in STOP_WORDS): continue
-            questions.append(x)
+            if any(y in x['question'].lower() for y in STOP_WORDS):
+                continue
+
+            # Check if at least 6 out of 10 options contain condition-dependent language
+            condition_count = 0
+            for opt_key, opt_text in x['options'].items():
+                opt_lower = opt_text.lower()
+                if any(kw in opt_lower for kw in CONDITION_KEYWORDS):
+                    condition_count += 1
+
+            # Only keep questions where most options reference conditions
+            if condition_count >= 6:
+                questions.append(x)
+
         return questions
     
     def _organize_inputs(self, inputs):
@@ -61,12 +79,9 @@ async def rewrite(generated: list[dict[str, any]]):
 
 
 async def generate_workflow(content: str):
-    # generate
+    # generate questions with 10 options directly
     generated = await generate(content)
     if not generated: return []
 
-    # refine
-    refine = await rewrite(generated)
-    if not refine: return []
-
-    return refine
+    # Skip rewrite step - we already have 10 options
+    return generated
