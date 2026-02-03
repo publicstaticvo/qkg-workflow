@@ -12,8 +12,6 @@ GREEDY_PARAMS = {
     "top_p": 1.0, "top_k": 1, "repetition_penalty": 1.0,
     "length_penalty": 1.0, "no_repeat_ngram_size": 0,
 }
-message_count = 0
-lock = asyncio.Lock()
     
 
 class Filter(AsyncLLMClient):
@@ -92,9 +90,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
             print(f"self-contained filter {e.last_attempt}")  
             return {"drop": True, "reason": f"self-contained test has an error: {e.last_attempt}"}       
         if specific: return {"drop": True, "reason": "not self-contained"}
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} self-contained")
 
         # whether the question is not self-contradicted
         try:
@@ -103,9 +98,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
             print(f"self_contradict {e.last_attempt}")
             self_contradict = False
         if self_contradict: return {"drop": True, "reason": "self-contradicted"}
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} self-contradicted")
         
         # whether the question has no redundant information
         try:
@@ -114,9 +106,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
             print(f"redundant {e.last_attempt}")
             redundant = False
         if redundant: return {"drop": True, "reason": "redundant"}
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} redundant")
         
         # whether the question has implausible assumptions
         try:
@@ -125,9 +114,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
             print(f"implausible {e.last_attempt}")
             implausible = False
         if implausible == True: return {"drop": True, "reason": "implausible"}
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} implausible")
         
         # whether the options can be judged without the question
         # A good option should be judged using BOTH the question and the option itself.
@@ -143,9 +129,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
         except RetryError as e:
             print(f"joint option filter {e.last_attempt}")
             return {"drop": True, "reason": "joint option filter error"}
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} option filter")
         
         # The final check
         try:
@@ -159,9 +142,6 @@ async def valid_check(i, generated: dict[str, Any], model_chair: list[LLMServerI
         except RetryError as e:
             print(f"tester {e.last_attempt}")
             answer = "Error"
-        async with lock:
-            message_count += 1
-            print(f"{message_count}th call: paper {i} answer")
         return {"critic": critic.model, "answer": answer, "drop": False, "independent": list(does_not_depend)}
     
     tasks = [asyncio.create_task(_valid(c)) for c in model_chair]
